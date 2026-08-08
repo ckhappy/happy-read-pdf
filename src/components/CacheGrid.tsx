@@ -17,13 +17,14 @@ interface Props {
   onGoToPage: (page: number) => void;
   hasPage: (page: number) => boolean;
   isPreloading: (page: number) => boolean;
+  barVisible?: boolean;
 }
 
 export interface CacheGridHandle {
   drawCell: (page: number) => void;
 }
 
-export default forwardRef<CacheGridHandle, Props>(function CacheGrid({ totalPages, pageNum, fgColor, bgColor, immersive, showUI, cacheLimit, onCacheLimitChange, onGoToPage, hasPage, isPreloading }, ref) {
+export default forwardRef<CacheGridHandle, Props>(function CacheGrid({ totalPages, pageNum, fgColor, bgColor, immersive, showUI, cacheLimit, onCacheLimitChange, onGoToPage, hasPage, isPreloading, barVisible = true }, ref) {
   const [gridVisible, setGridVisible] = useState(false);
   const cacheGridCanvasRef = useRef<HTMLCanvasElement>(null);
   const pageNumRef = useRef(pageNum);
@@ -108,10 +109,10 @@ export default forwardRef<CacheGridHandle, Props>(function CacheGrid({ totalPage
   }, [pageNum, drawCell]);
 
   return (
-    <>
+    <div className={barVisible ? "" : "hidden"}>
       {!immersive && showUI && totalPages > 0 && (
         <button
-          className="absolute top-3 right-5 z-10 text-xs cursor-pointer select-none hover:opacity-70 px-1.5 py-0.5 rounded"
+          className="absolute top-9 right-5 z-10 text-xs cursor-pointer select-none hover:opacity-70 px-1.5 py-0.5 rounded"
           style={{ color: fgColor + "99", backgroundColor: gridVisible ? fgColor + "22" : "transparent" }}
           onClick={() => setGridVisible((v) => !v)}
           title="查看缓存状态"
@@ -120,7 +121,7 @@ export default forwardRef<CacheGridHandle, Props>(function CacheGrid({ totalPage
         </button>
       )}
       {!immersive && showUI && totalPages > 0 && gridVisible && (
-        <div className="absolute right-5 top-10 z-10 flex flex-col items-end gap-0.5">
+        <div className="absolute right-5 top-16 z-10 flex flex-col items-end gap-0.5">
           <canvas
             ref={cacheGridCanvasRef}
             className="block cursor-pointer"
@@ -156,6 +157,6 @@ export default forwardRef<CacheGridHandle, Props>(function CacheGrid({ totalPage
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 });

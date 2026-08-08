@@ -29,6 +29,9 @@ pub fn run() {
                     .level(log::LevelFilter::Info)
                     .build(),
             )?;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_shadow(false);
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

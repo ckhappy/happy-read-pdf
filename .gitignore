@@ -24,3 +24,9 @@ dist-ssr
 *.sw?
 src-tauri/target/
 .vs/
+
+# Local-only files (never commit)
+AGENTS.md
+.release/
+HappyReadPDF.exe
+HappyReadPDF_v*_portable.zip

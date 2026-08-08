@@ -40,11 +40,17 @@ interface Props {
   onFgColorChange?: (c: string) => void;
   immersive?: boolean;
   onImmersiveChange?: (v: boolean) => void;
+  windowOpacity?: number;
+  onWindowOpacityChange?: (v: number) => void;
+  onOpenFile?: () => void;
+  onSetCover?: () => void;
+  hasCover?: boolean;
 }
 
 const DEFAULT_SCALE = 1.0;
+const MIN_SCALE = 0.25;
 
-export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI = false, active = true, onBgColorChange, onFgColorChange, immersive = false, onImmersiveChange }: Props) {
+export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI = false, active = true, onBgColorChange, onFgColorChange, immersive = false, onImmersiveChange, windowOpacity, onWindowOpacityChange, onOpenFile, onSetCover, hasCover }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<PDFDocumentProxy | null>(null);
@@ -85,6 +91,20 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
   const [rawMode, setRawMode] = useState(false);
   const rawModeRef = useRef(false);
   useEffect(() => { rawModeRef.current = rawMode; }, [rawMode]);
+  const [barVisible, setBarVisible] = useState(true);
+
+  useEffect(() => {
+    const onMouseOut = (e: MouseEvent) => {
+      if (!e.relatedTarget) setBarVisible(false);
+    };
+    const onMouseOver = () => setBarVisible(true);
+    document.addEventListener("mouseout", onMouseOut);
+    document.addEventListener("mouseover", onMouseOver);
+    return () => {
+      document.removeEventListener("mouseout", onMouseOut);
+      document.removeEventListener("mouseover", onMouseOver);
+    };
+  }, []);
 
   const renderOneRaw = useCallback(async (
     num: number,
@@ -121,6 +141,7 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
 
   const pageCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
   const displayCacheRef = useRef<Map<number, ImageData>>(new Map());
+  const pageNaturalRef = useRef({ width: 0, height: 0 });
   const rgbCacheRef = useRef<{ bg: [number, number, number]; fg: [number, number, number] }>({ bg: hexToRgb(bgColor), fg: hexToRgb(fgColor) });
 
   const ensureDisplayData = (pageNum: number, source: ImageBitmap): ImageData => {
@@ -153,6 +174,7 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
     const displayData = ensureDisplayData(pageNum, source);
     const w = displayData.width;
     const h = displayData.height;
+    pageNaturalRef.current = { width: w / renderScaleRef.current, height: h / renderScaleRef.current };
 
     let oc = offscreenRef.current;
     if (!oc) {
@@ -350,8 +372,19 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
     renderPageRef.current(pageRef.current);
   }, []);
 
-  const zoomIn = useCallback(() => {
-    const s = Math.min(3.0, +(scaleRef.current + 0.25).toFixed(2));
+  const zoomBy = useCallback((delta: number) => {
+    let upper = Infinity;
+    if (delta > 0) {
+      const avail = scrollRef.current?.clientWidth ?? 0;
+      const nw = pageNaturalRef.current.width;
+      if (avail > 0 && nw > 0) {
+        const fit = avail / nw;
+        if (scaleRef.current >= fit) return;
+        upper = fit;
+      }
+    }
+    const s = Math.max(MIN_SCALE, Math.min(upper, +(scaleRef.current + delta).toFixed(3)));
+    if (s === scaleRef.current) return;
     scaleRef.current = s;
     setScale(s);
     if (fileName) try { localStorage.setItem(STORAGE_SCALE_PREFIX + fileName, String(s)); } catch {}
@@ -363,11 +396,21 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
     }
   }, [displayImageData, fileName]);
 
-  const zoomOut = useCallback(() => {
-    const s = Math.max(0.25, +(scaleRef.current - 0.25).toFixed(2));
-    scaleRef.current = s;
-    setScale(s);
-    if (fileName) try { localStorage.setItem(STORAGE_SCALE_PREFIX + fileName, String(s)); } catch {}
+  const zoomIn = useCallback(() => zoomBy(0.25), [zoomBy]);
+  const zoomOut = useCallback(() => zoomBy(-0.25), [zoomBy]);
+
+  const fitToWidth = useCallback(() => {
+    const container = scrollRef.current;
+    const nw = pageNaturalRef.current.width;
+    if (!container || nw <= 0) return;
+    const avail = container.clientWidth;
+    if (avail <= 0) return;
+    const fit = Math.max(MIN_SCALE, avail / nw);
+    const cur = scaleRef.current;
+    if (Math.abs(fit - cur) < 0.005) return;
+    scaleRef.current = fit;
+    setScale(fit);
+    if (fileName) try { localStorage.setItem(STORAGE_SCALE_PREFIX + fileName, String(fit)); } catch {}
     const cached = pageCacheRef.current.get(pageRef.current);
     if (cached) {
       displayImageData(cached, pageRef.current);
@@ -392,10 +435,71 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
     ensurePreloadWindow(pageRef.current);
   }, [ensurePreloadWindow]);
 
+  const toggleMaximize = useCallback(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      const w = getCurrentWindow();
+      w.isMaximized().then((m) => (m ? w.unmaximize() : w.maximize())).catch(() => {});
+    }).catch(() => {});
+  }, []);
+
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleScrollPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+    if (e.target !== canvasRef.current) return;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+  }, []);
+
+  const handleScrollPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const start = dragStartRef.current;
+    if (!start) return;
+    if (Math.abs(e.clientX - start.x) < 4 && Math.abs(e.clientY - start.y) < 4) return;
+    dragStartRef.current = null;
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      getCurrentWindow().startDragging().catch(() => {});
+    }).catch(() => {});
+  }, []);
+
+  const handleScrollPointerUp = useCallback(() => {
+    dragStartRef.current = null;
+  }, []);
+
   const zoomInRef = useRef(zoomIn);
   zoomInRef.current = zoomIn;
   const zoomOutRef = useRef(zoomOut);
   zoomOutRef.current = zoomOut;
+  const zoomByRef = useRef(zoomBy);
+  zoomByRef.current = zoomBy;
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoomByRef.current(-e.deltaY * 0.001);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => fitToWidth());
+    });
+    ro.observe(el, { box: "border-box" });
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [fitToWidth]);
 
   useEffect(() => {
     if (!fileUrl) return;
@@ -418,6 +522,12 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
         ensurePreloadWindow(target);
         preloadQueueRef.current = preloadQueueRef.current.filter((p) => p !== target);
         renderPageRef.current(target);
+        (async () => {
+          for (let i = 0; i < 600 && pageNaturalRef.current.width <= 0; i++) {
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+          fitToWidth();
+        })();
 
         if (showUI) {
           for (let w = 0; w < 2; w++) {
@@ -457,7 +567,7 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
       cancelAnimationFrame(preloadWindowRafRef.current);
       preloadWindowRafRef.current = 0;
     };
-  }, [fileUrl, fileName, ensurePreloadWindow, showUI]);
+  }, [fileUrl, fileName, ensurePreloadWindow, showUI, fitToWidth]);
 
   useEffect(() => {
     if (!docRef.current) return;
@@ -502,18 +612,18 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
         e.preventDefault();
         const next = pageRef.current + 1;
         if (next <= totalPages) goToPageRef.current(next);
+      } else if (e.key === "ArrowUp" && e.ctrlKey) {
+        e.preventDefault();
+        zoomInRef.current();
+      } else if (e.key === "ArrowDown" && e.ctrlKey) {
+        e.preventDefault();
+        zoomOutRef.current();
       } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-        scrollRef.current?.focus();
+        if (!e.altKey) scrollRef.current?.focus();
       } else if (e.key === " ") {
         e.preventDefault();
         scrollRef.current?.focus();
         scrollRef.current?.scrollBy({ top: scrollRef.current.clientHeight * 0.9, behavior: "smooth" });
-      } else if (e.key === "=" || e.key === "+") {
-        e.preventDefault();
-        zoomInRef.current();
-      } else if (e.key === "-") {
-        e.preventDefault();
-        zoomOutRef.current();
       } else if (e.key === "Escape") {
         onImmersiveChange?.(false);
       }
@@ -523,7 +633,7 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
   }, [totalPages, onImmersiveChange]);
 
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0 flex flex-col">
       <style>{`
         .scrollbar-hidden::-webkit-scrollbar-thumb {
           background-color: ${fgColor} !important;
@@ -535,17 +645,30 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
           width: 6px;
           height: 6px;
         }
+        .scrollbar-hidden-imm::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        .scrollbar-hidden-imm::-webkit-scrollbar-thumb,
+        .scrollbar-hidden-imm::-webkit-scrollbar-track {
+          background: transparent;
+        }
       `}</style>
       <div
         ref={scrollRef}
         tabIndex={-1}
-        className="absolute inset-0 flex flex-col items-center overflow-auto outline-none min-h-0 scrollbar-hidden"
-        style={{ backgroundColor: bgColor, scrollbarGutter: "stable", scrollbarColor: `${fgColor} transparent` }}
+        onDoubleClick={toggleMaximize}
+        onPointerDown={handleScrollPointerDown}
+        onPointerMove={handleScrollPointerMove}
+        onPointerUp={handleScrollPointerUp}
+        className={"flex-1 min-h-0 flex flex-col items-center overflow-auto outline-none " + (immersive || !barVisible ? "scrollbar-hidden-imm" : "scrollbar-hidden")}
+        style={{ backgroundColor: bgColor, scrollbarGutter: "stable", scrollbarColor: immersive || !barVisible ? "transparent transparent" : `${fgColor} transparent` }}
       >
       {error && <p className="text-red-400 my-4 shrink-0">错误: {error}</p>}
-      {totalPages > 0 && (
-        <BottomBar
-          pageNum={pageNum}
+      <canvas ref={canvasRef} className={error ? "hidden" : "block shadow-md mx-auto shrink-0 min-h-0"} />
+      </div>
+      <BottomBar
+        pageNum={pageNum}
           totalPages={totalPages}
           loading={loading}
           scale={scale}
@@ -554,6 +677,7 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
           isHighRes={isHighRes}
           rawMode={rawMode}
           immersive={immersive}
+          showUI={showUI}
           goToPage={goToPage}
           zoomIn={zoomIn}
           zoomOut={zoomOut}
@@ -562,10 +686,13 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
           onBgColorChange={onBgColorChange}
           onFgColorChange={onFgColorChange}
           onImmersiveChange={onImmersiveChange}
+          windowOpacity={windowOpacity}
+          onWindowOpacityChange={onWindowOpacityChange}
+          onOpenFile={onOpenFile}
+          onSetCover={onSetCover}
+          hasCover={hasCover}
+          barVisible={barVisible}
         />
-      )}
-      <canvas ref={canvasRef} className={error ? "hidden" : "block shadow-md mx-auto shrink-0 min-h-0"} />
-    </div>
       <CacheGrid
         ref={cacheGridRef}
         totalPages={totalPages}
@@ -584,6 +711,7 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
         onGoToPage={goToPage}
         hasPage={(p) => pageCacheRef.current.has(p)}
         isPreloading={(p) => preloadTasksRef.current.has(p)}
+        barVisible={barVisible}
       />
     </div>
   );

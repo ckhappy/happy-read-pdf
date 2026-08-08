@@ -42,3 +42,14 @@ export function hexToRgb(hex: string): [number, number, number] {
   if (!result) return [0, 0, 0];
   return [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)];
 }
+
+export function darkenColor(hex: string, factor = 0.7): string {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const num = parseInt(full, 16);
+  if (Number.isNaN(num)) return hex;
+  const r = Math.round(((num >> 16) & 255) * factor);
+  const g = Math.round(((num >> 8) & 255) * factor);
+  const b = Math.round((num & 255) * factor);
+  return `rgb(${r}, ${g}, ${b})`;
+}

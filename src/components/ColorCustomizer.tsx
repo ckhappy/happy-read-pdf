@@ -21,7 +21,7 @@ export default function ColorCustomizer({ bgColor, fgColor, setBgColor, setFgCol
 
   return (
     <div className="flex items-center gap-1.5" style={{ color: fgColor }}>
-      <span className="text-xs select-none" style={{ color: fgColor + "aa" }}>主题</span>
+      <span className="text-xs select-none" style={{ color: fgColor }}>主题</span>
       <select
         value={hasRaw && rawMode ? "原始" : (currentTheme || "")}
         onChange={(e) => {
@@ -33,14 +33,14 @@ export default function ColorCustomizer({ bgColor, fgColor, setBgColor, setFgCol
           }
           e.target.blur();
         }}
-        className="text-xs border cursor-pointer rounded px-1 py-0.5"
-        style={{ color: fgColor + "cc", backgroundColor: bgColor, borderColor: fgColor + "33" }}
+        className="text-xs border cursor-pointer rounded px-1.5 py-0.5 transition-opacity hover:opacity-80"
+        style={{ color: fgColor, backgroundColor: bgColor, borderColor: fgColor + "44" }}
       >
         {THEMES.filter((t) => hasRaw || t.name !== "原始").map((t) => (
           <option key={t.name} value={t.name}>{t.name}</option>
         ))}
       </select>
-      <span className="text-xs select-none ml-1" style={{ color: fgColor + "aa" }}>背景</span>
+      <span className="text-xs select-none ml-1" style={{ color: fgColor }}>背景</span>
       <label className="flex items-center">
         <input
           type="color"
@@ -49,7 +49,7 @@ export default function ColorCustomizer({ bgColor, fgColor, setBgColor, setFgCol
           className="w-6 h-6 rounded cursor-pointer border-0 p-0"
         />
       </label>
-      <span className="text-xs select-none" style={{ color: fgColor + "aa" }}>文字</span>
+      <span className="text-xs select-none" style={{ color: fgColor }}>文字</span>
       <label className="flex items-center">
         <input
           type="color"

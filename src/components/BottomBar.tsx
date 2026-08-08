@@ -1,5 +1,5 @@
 import ColorCustomizer from "./ColorCustomizer";
-import { toggleFullscreen } from "../utils/fullscreen";
+import { darkenColor } from "../utils/colorTransform";
 
 interface Props {
   pageNum: number;
@@ -11,6 +11,7 @@ interface Props {
   isHighRes: boolean;
   rawMode: boolean;
   immersive: boolean;
+  showUI?: boolean;
   goToPage: (n: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
@@ -19,30 +20,66 @@ interface Props {
   onBgColorChange?: (c: string) => void;
   onFgColorChange?: (c: string) => void;
   onImmersiveChange?: (v: boolean) => void;
+  windowOpacity?: number;
+  onWindowOpacityChange?: (v: number) => void;
+  onOpenFile?: () => void;
+  onSetCover?: () => void;
+  hasCover?: boolean;
+  barVisible?: boolean;
 }
+
+const btnCls = "px-1.5 py-0.5 rounded text-xs cursor-pointer transition-opacity hover:opacity-80";
+const btnClsDisabled = btnCls + " disabled:opacity-40";
 
 export default function BottomBar({
   pageNum, totalPages, loading, scale, fgColor, bgColor, isHighRes, rawMode, immersive,
-  goToPage, zoomIn, zoomOut, toggleQuality, onSetRawMode,
-  onBgColorChange, onFgColorChange, onImmersiveChange,
+  showUI = false, goToPage, zoomIn, zoomOut, toggleQuality, onSetRawMode,
+  onBgColorChange, onFgColorChange, onImmersiveChange, windowOpacity = 100, onWindowOpacityChange,
+  onOpenFile, onSetCover, hasCover = false, barVisible = true,
 }: Props) {
+  const immBtn = (
+    <button
+      className={btnCls + " ml-1"}
+      style={{ backgroundColor: fgColor + "22", color: fgColor }}
+      onClick={() => { onImmersiveChange?.(!immersive); }}
+      title={immersive ? "退出沉浸全屏" : "沉浸全屏"}
+    >
+      {immersive ? "退出" : "沉浸"}
+    </button>
+  );
+
+  if (!barVisible) return null;
+
   return (
     <div
-      className="fixed bottom-2 right-6 flex items-center gap-1 z-10 flex-wrap justify-end"
-      style={{ color: fgColor }}
+      className={immersive
+        ? "fixed bottom-2 right-6 flex items-center gap-1 z-10 flex-wrap justify-end"
+        : "absolute bottom-0 left-0 right-0 flex items-center gap-1 flex-wrap justify-between z-10 px-3 py-1 border-t border-white/10"}
+      style={{ color: fgColor, backgroundColor: immersive ? undefined : darkenColor(bgColor), opacity: immersive ? undefined : 0.85 }}
     >
-      {!immersive && loading && (
-        <>
-          <span className="text-xs select-none animate-pulse" style={{ color: "#22c55e", animationDelay: "0ms" }}>●</span>
-          <span className="text-xs select-none animate-pulse" style={{ color: "#22c55e", animationDelay: "200ms" }}>●</span>
-          <span className="text-xs select-none animate-pulse" style={{ color: "#22c55e", animationDelay: "400ms" }}>●</span>
-          <span className="text-xs select-none ml-0.5" style={{ color: "#22c55e" }}>渲染中</span>
-        </>
+      {!immersive && showUI && (
+        <div className="flex items-center gap-1 min-w-0">
+          {onOpenFile && (
+            <button className={btnCls} style={{ backgroundColor: fgColor + "22", color: fgColor }} onClick={onOpenFile} title="打开 PDF">打开 PDF</button>
+          )}
+          {onSetCover && (
+            <button className={btnCls} style={{ backgroundColor: fgColor + "22", color: fgColor }} onClick={onSetCover} title={hasCover ? "更换掩护" : "设置掩护"}>{hasCover ? "更换掩护" : "设置掩护"}</button>
+          )}
+          <span className="text-xs select-none" style={{ color: fgColor }} title="老板键：Alt+` 切换掩护/隐藏窗口">Boss: Alt+`</span>
+        </div>
       )}
       {!immersive && (
-        <>
+        <div className="flex items-center gap-1 flex-wrap justify-end ml-auto">
+          {loading && (
+            <>
+              <span className="text-xs select-none animate-pulse" style={{ color: "#22c55e", animationDelay: "0ms" }}>●</span>
+              <span className="text-xs select-none animate-pulse" style={{ color: "#22c55e", animationDelay: "200ms" }}>●</span>
+              <span className="text-xs select-none animate-pulse" style={{ color: "#22c55e", animationDelay: "400ms" }}>●</span>
+              <span className="text-xs select-none ml-0.5" style={{ color: "#22c55e" }}>渲染中</span>
+            </>
+          )}
           <button
-            className="px-1.5 py-0.5 rounded text-xs disabled:opacity-40 cursor-pointer"
+            className={btnClsDisabled}
             style={{ backgroundColor: fgColor + "22", color: fgColor }}
             disabled={pageNum <= 1}
             onClick={() => goToPage(pageNum - 1)}
@@ -58,7 +95,7 @@ export default function BottomBar({
             max={totalPages}
             placeholder="跳转"
             className="w-10 h-5 text-xs bg-transparent border-b text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            style={{ color: fgColor + "99", borderColor: fgColor + "44" }}
+            style={{ color: fgColor, borderColor: fgColor + "44" }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 const v = Number((e.target as HTMLInputElement).value);
@@ -68,18 +105,18 @@ export default function BottomBar({
             }}
           />
           <button
-            className="px-1.5 py-0.5 rounded text-xs disabled:opacity-40 cursor-pointer"
+            className={btnClsDisabled}
             style={{ backgroundColor: fgColor + "22", color: fgColor }}
             disabled={pageNum >= totalPages}
             onClick={() => goToPage(pageNum + 1)}
           >
             ▶
           </button>
-          <span className="text-xs select-none ml-1" style={{ color: fgColor + "99" }}>
+          <span className="text-xs select-none ml-1" style={{ color: fgColor }}>
             缩放 {Math.round(scale * 100)}%
           </span>
           <button
-            className="px-1.5 py-0.5 rounded text-xs cursor-pointer"
+            className={btnCls}
             style={{ backgroundColor: fgColor + "22", color: fgColor }}
             onClick={zoomOut}
             title="缩小"
@@ -87,32 +124,43 @@ export default function BottomBar({
             −
           </button>
           <button
-            className="px-1.5 py-0.5 rounded text-xs cursor-pointer"
+            className={btnCls}
             style={{ backgroundColor: fgColor + "22", color: fgColor }}
             onClick={zoomIn}
             title="放大"
           >
             +
           </button>
+          <ColorCustomizer bgColor={bgColor} fgColor={fgColor} setBgColor={onBgColorChange || (() => {})} setFgColor={onFgColorChange || (() => {})} rawMode={rawMode} onSetRawMode={onSetRawMode} />
+          <span
+            className="text-xs select-none"
+            style={{ color: fgColor }}
+            title="窗口透明度 (Alt+↑ / Alt+↓)"
+          >
+            透明 <span className="inline-block w-[3ch] text-center">{Math.round(windowOpacity)}</span>%
+          </span>
+          <input
+            type="range"
+            min={10}
+            max={100}
+            value={windowOpacity}
+            onChange={(e) => onWindowOpacityChange?.(Number(e.target.value))}
+            className="w-20 h-4 cursor-pointer"
+            style={{ accentColor: fgColor }}
+            title="窗口透明度"
+          />
           <button
-            className="px-1.5 py-0.5 rounded text-xs cursor-pointer"
+            className={btnCls}
             style={{ backgroundColor: fgColor + "22", color: fgColor }}
             onClick={toggleQuality}
             title={isHighRes ? "切换标清渲染" : "切换高清渲染"}
           >
             {isHighRes ? "高清" : "标清"}
           </button>
-          <ColorCustomizer bgColor={bgColor} fgColor={fgColor} setBgColor={onBgColorChange || (() => {})} setFgColor={onFgColorChange || (() => {})} rawMode={rawMode} onSetRawMode={onSetRawMode} />
-        </>
+          {immBtn}
+        </div>
       )}
-      <button
-        className="px-1.5 py-0.5 rounded text-xs cursor-pointer ml-1"
-        style={{ backgroundColor: fgColor + "22", color: fgColor }}
-        onClick={() => { onImmersiveChange?.(!immersive); toggleFullscreen(); }}
-        title={immersive ? "退出沉浸全屏" : "沉浸全屏"}
-      >
-        {immersive ? "退出" : "沉浸"}
-      </button>
+      {immersive && immBtn}
     </div>
   );
 }

@@ -4,13 +4,7 @@ export async function toggleFullscreen(): Promise<void> {
     try {
       const win = getCurrentWindow();
       const fs = await win.isFullscreen();
-      if (fs) {
-        await win.setFullscreen(false);
-        await win.setDecorations(true);
-      } else {
-        await win.setDecorations(false);
-        await win.setFullscreen(true);
-      }
+      await win.setFullscreen(!fs);
     } catch {}
   } else if (document.fullscreenElement) {
     await document.exitFullscreen();

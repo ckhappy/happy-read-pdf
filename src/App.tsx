@@ -1,13 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import Toolbar from "./components/Toolbar";
 import PDFViewer from "./components/PDFViewer";
+import WindowControls from "./components/WindowControls";
 import { savePDFCache, loadPDFCache } from "./utils/pdfCache";
 import { toggleFullscreen } from "./utils/fullscreen";
+import { darkenColor } from "./utils/colorTransform";
 import "./index.css";
 
 function loadColor(key: string, fallback: string): string {
   try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
 }
+
+function loadNumber(key: string, fallback: number): number {
+  try { return Number(localStorage.getItem(key)) || fallback; } catch { return fallback; }
+}
+
+const MIN_OPACITY = 10;
+const OPACITY_STEP = 5;
 
 export default function App() {
   const [realFileUrl, setRealFileUrl] = useState("");
@@ -17,13 +25,15 @@ export default function App() {
   const [showingReal, setShowingReal] = useState(true);
   const [bgColor, setBgColor] = useState(() => loadColor("happyread-bg", "#1e1e2e"));
   const [fgColor, setFgColor] = useState(() => loadColor("happyread-fg", "#cdd6f4"));
+  const [opacity, setOpacity] = useState(() => loadNumber("happyread-window-opacity", 100));
   const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => { localStorage.setItem("happyread-bg", bgColor); }, [bgColor]);
   useEffect(() => { localStorage.setItem("happyread-fg", fgColor); }, [fgColor]);
+  useEffect(() => { localStorage.setItem("happyread-window-opacity", String(opacity)); }, [opacity]);
 
-  const [showToolbar, setShowToolbar] = useState(false);
   const [immersive, setImmersive] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const realInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const realFileUrlRef = useRef(realFileUrl);
@@ -36,7 +46,6 @@ export default function App() {
         const blob = new Blob([real.data]);
         setRealFileUrl(URL.createObjectURL(blob));
         setRealFileName(real.fileName);
-        setShowToolbar(false);
       }
       if (cover) {
         const blob = new Blob([cover.data]);
@@ -63,7 +72,6 @@ export default function App() {
     setRealFileName(file.name);
     setRealFileUrl(URL.createObjectURL(new Blob([arrayBuffer])));
     setShowingReal(true);
-    setShowToolbar(false);
     savePDFCache("real", file.name, arrayBuffer).catch(() => {});
   }, []);
 
@@ -77,8 +85,12 @@ export default function App() {
     savePDFCache("cover", file.name, arrayBuffer).catch(() => {});
   }, [coverFileUrl]);
 
-  const handleToggleFullscreen = useCallback(() => {
-    toggleFullscreen().catch(() => {});
+  const handleImmersiveChange = useCallback((next: boolean) => {
+    setImmersive(next);
+  }, []);
+
+  const adjustOpacity = useCallback((delta: number) => {
+    setOpacity((v) => Math.min(100, Math.max(MIN_OPACITY, v + delta)));
   }, []);
 
   useEffect(() => {
@@ -90,17 +102,50 @@ export default function App() {
       }
       if (e.key === "F11") {
         e.preventDefault();
-        toggleFullscreen().catch(() => {});
+        if (immersive) {
+          handleImmersiveChange(false);
+        } else {
+          toggleFullscreen().catch(() => {});
+        }
+      }
+      if (e.altKey && e.key === "ArrowUp") {
+        e.preventDefault();
+        adjustOpacity(OPACITY_STEP);
+      }
+      if (e.altKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        adjustOpacity(-OPACITY_STEP);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [coverFileUrl]);
+  }, [coverFileUrl, immersive, handleImmersiveChange, adjustOpacity]);
 
-  if (initialLoading) return <div className="h-screen" style={{ backgroundColor: bgColor }} />;
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      e.preventDefault();
+      setCtxMenu({ x: e.clientX, y: e.clientY });
+    };
+    const close = () => setCtxMenu(null);
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("contextmenu", onContextMenu);
+    window.addEventListener("click", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("contextmenu", onContextMenu);
+      window.removeEventListener("click", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  if (initialLoading) return <div className="h-screen" style={{ backgroundColor: bgColor, opacity: opacity / 100 }} />;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: bgColor }}>
+    <div className="h-screen flex flex-col overflow-hidden relative" style={{ backgroundColor: bgColor, opacity: opacity / 100 }}>
       <input
         ref={realInputRef}
         type="file"
@@ -115,27 +160,43 @@ export default function App() {
         className="hidden"
         onChange={handleCoverFile}
       />
-      {showingReal && (
-        <Toolbar
-          fileName={realFileName}
-          onOpenFile={handleOpenFile} onSetCover={handleSetCover}
-          hasCover={!!coverFileUrl} showingReal={true}
-          open={showToolbar}
-          onToggle={() => setShowToolbar((v) => !v)}
-          hidden={immersive}
-          onFullscreen={handleToggleFullscreen}
-        />
-      )}
+      <WindowControls fgColor={fgColor} bgColor={bgColor} fileName={showingReal ? realFileName : coverFileName} />
       <div className="flex-1 relative">
         <div className={"h-full relative " + (showingReal ? "" : "hidden")}>
-          <PDFViewer fileUrl={realFileUrl} fileName={realFileName} bgColor={bgColor} fgColor={fgColor} showUI={true} active={showingReal} onBgColorChange={setBgColor} onFgColorChange={setFgColor} immersive={immersive} onImmersiveChange={setImmersive} />
+          <PDFViewer fileUrl={realFileUrl} fileName={realFileName} bgColor={bgColor} fgColor={fgColor} showUI={true} active={showingReal} onBgColorChange={setBgColor} onFgColorChange={setFgColor} immersive={immersive} onImmersiveChange={handleImmersiveChange} windowOpacity={opacity} onWindowOpacityChange={setOpacity} onOpenFile={handleOpenFile} onSetCover={handleSetCover} hasCover={!!coverFileUrl} />
         </div>
         {coverFileUrl && (
           <div className={"h-full relative " + (showingReal ? "hidden" : "")}>
-             <PDFViewer fileUrl={coverFileUrl} fileName={coverFileName} bgColor={bgColor} fgColor={fgColor} showUI={false} active={!showingReal} onBgColorChange={setBgColor} onFgColorChange={setFgColor} immersive={immersive} onImmersiveChange={setImmersive} />
+             <PDFViewer fileUrl={coverFileUrl} fileName={coverFileName} bgColor={bgColor} fgColor={fgColor} showUI={false} active={!showingReal} onBgColorChange={setBgColor} onFgColorChange={setFgColor} immersive={immersive} onImmersiveChange={handleImmersiveChange} windowOpacity={opacity} onWindowOpacityChange={setOpacity} />
           </div>
         )}
       </div>
+      {ctxMenu && (
+        <div
+          className="fixed z-50 min-w-36 py-1 rounded shadow-lg border border-white/10 select-none"
+          style={{
+            left: Math.min(ctxMenu.x, window.innerWidth - 170),
+            top: Math.min(ctxMenu.y, window.innerHeight - 96),
+            backgroundColor: darkenColor(bgColor),
+            color: fgColor,
+          }}
+        >
+          <button
+            className="block w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:opacity-80"
+            style={{ color: fgColor }}
+            onClick={() => { setCtxMenu(null); handleOpenFile(); }}
+          >
+            打开 PDF
+          </button>
+          <button
+            className="block w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:opacity-80"
+            style={{ color: fgColor }}
+            onClick={() => { setCtxMenu(null); handleSetCover(); }}
+          >
+            {coverFileUrl ? "更换掩护" : "设置掩护"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

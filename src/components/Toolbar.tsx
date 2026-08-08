@@ -1,24 +1,23 @@
 interface Props {
   fileName: string;
+  bgColor: string;
   onOpenFile: () => void;
   onSetCover: () => void;
   hasCover: boolean;
   showingReal: boolean;
   open: boolean;
   onToggle: () => void;
-  hidden?: boolean;
   onFullscreen?: () => void;
 }
 
-export default function Toolbar({ fileName, onOpenFile, onSetCover, hasCover, showingReal, open, onToggle, hidden, onFullscreen }: Props) {
-
-  const hideCls = hidden ? "opacity-0 pointer-events-none" : "";
+export default function Toolbar({ fileName, bgColor, onOpenFile, onSetCover, hasCover, showingReal, open, onToggle, onFullscreen }: Props) {
 
   return (
     <>
       {open ? (
         <div
-          className={"flex items-center justify-between px-4 py-2 border-b border-gray-600 select-none bg-gray-900 " + hideCls}
+          className="flex items-center justify-between px-4 py-2 border-b border-gray-600 select-none"
+          style={{ backgroundColor: bgColor }}
           onClick={(e) => { if (e.target === e.currentTarget) onToggle(); }}
         >
           <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
@@ -56,7 +55,8 @@ export default function Toolbar({ fileName, onOpenFile, onSetCover, hasCover, sh
         </div>
       ) : (
         <div
-          className={"flex items-center justify-center py-0.5 border-b border-gray-600 select-none cursor-pointer bg-gray-900 " + hideCls}
+          className="flex items-center justify-center py-0.5 border-b border-gray-600 select-none cursor-pointer"
+          style={{ backgroundColor: bgColor }}
           onClick={onToggle}
         >
           <span className="text-xs text-gray-400">▼</span>
