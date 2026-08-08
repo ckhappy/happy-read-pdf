@@ -37,3 +37,13 @@ export async function loadPDFCache(key: string): Promise<CachedPDF | null> {
     req.onerror = () => reject(req.error);
   });
 }
+
+export async function deletePDFCache(key: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}

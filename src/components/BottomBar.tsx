@@ -1,4 +1,5 @@
 import ColorCustomizer from "./ColorCustomizer";
+import BossKeyButton from "./BossKeyButton";
 import { darkenColor } from "../utils/colorTransform";
 
 interface Props {
@@ -24,7 +25,9 @@ interface Props {
   onWindowOpacityChange?: (v: number) => void;
   onOpenFile?: () => void;
   onSetCover?: () => void;
-  hasCover?: boolean;
+  onRemoveCover?: () => void;
+  alwaysOnTop?: boolean;
+  onToggleAlwaysOnTop?: () => void;
   barVisible?: boolean;
 }
 
@@ -35,7 +38,7 @@ export default function BottomBar({
   pageNum, totalPages, loading, scale, fgColor, bgColor, isHighRes, rawMode, immersive,
   showUI = false, goToPage, zoomIn, zoomOut, toggleQuality, onSetRawMode,
   onBgColorChange, onFgColorChange, onImmersiveChange, windowOpacity = 100, onWindowOpacityChange,
-  onOpenFile, onSetCover, hasCover = false, barVisible = true,
+  onOpenFile, onSetCover, onRemoveCover, alwaysOnTop = true, onToggleAlwaysOnTop, barVisible = true,
 }: Props) {
   const immBtn = (
     <button
@@ -45,6 +48,17 @@ export default function BottomBar({
       title={immersive ? "退出沉浸全屏" : "沉浸全屏"}
     >
       {immersive ? "退出" : "沉浸"}
+    </button>
+  );
+
+  const topmostBtn = onToggleAlwaysOnTop && (
+    <button
+      className={btnCls}
+      style={{ backgroundColor: alwaysOnTop ? fgColor + "55" : fgColor + "22", color: fgColor }}
+      onClick={onToggleAlwaysOnTop}
+      title={alwaysOnTop ? "窗口置顶已开启，点击关闭" : "窗口置顶已关闭，点击开启"}
+    >
+      置顶:{alwaysOnTop ? "开" : "关"}
     </button>
   );
 
@@ -63,9 +77,22 @@ export default function BottomBar({
             <button className={btnCls} style={{ backgroundColor: fgColor + "22", color: fgColor }} onClick={onOpenFile} title="打开 PDF">打开 PDF</button>
           )}
           {onSetCover && (
-            <button className={btnCls} style={{ backgroundColor: fgColor + "22", color: fgColor }} onClick={onSetCover} title={hasCover ? "更换掩护" : "设置掩护"}>{hasCover ? "更换掩护" : "设置掩护"}</button>
+            <button className={btnCls} style={{ backgroundColor: fgColor + "22", color: fgColor }} onClick={onSetCover} title="更换掩护">更换掩护</button>
           )}
-          <span className="text-xs select-none" style={{ color: fgColor }} title="老板键：Alt+` 切换掩护/隐藏窗口">Boss: Alt+`</span>
+          <BossKeyButton fgColor={fgColor} />
+          {topmostBtn}
+        </div>
+      )}
+      {!immersive && !showUI && (
+        <div className="flex items-center gap-1 min-w-0">
+          {onSetCover && (
+            <button className={btnCls} style={{ backgroundColor: fgColor + "22", color: fgColor }} onClick={onSetCover} title="更换掩护">更换掩护</button>
+          )}
+          {onRemoveCover && (
+            <button className={btnCls} style={{ backgroundColor: fgColor + "22", color: fgColor }} onClick={onRemoveCover} title="移除掩护 PDF">移除掩护 PDF</button>
+          )}
+          <BossKeyButton fgColor={fgColor} />
+          {topmostBtn}
         </div>
       )}
       {!immersive && (

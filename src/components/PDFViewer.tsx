@@ -44,13 +44,15 @@ interface Props {
   onWindowOpacityChange?: (v: number) => void;
   onOpenFile?: () => void;
   onSetCover?: () => void;
-  hasCover?: boolean;
+  onRemoveCover?: () => void;
+  alwaysOnTop?: boolean;
+  onToggleAlwaysOnTop?: () => void;
 }
 
 const DEFAULT_SCALE = 1.0;
 const MIN_SCALE = 0.25;
 
-export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI = false, active = true, onBgColorChange, onFgColorChange, immersive = false, onImmersiveChange, windowOpacity, onWindowOpacityChange, onOpenFile, onSetCover, hasCover }: Props) {
+export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI = false, active = true, onBgColorChange, onFgColorChange, immersive = false, onImmersiveChange, windowOpacity, onWindowOpacityChange, onOpenFile, onSetCover, onRemoveCover, alwaysOnTop, onToggleAlwaysOnTop }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<PDFDocumentProxy | null>(null);
@@ -690,7 +692,9 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
           onWindowOpacityChange={onWindowOpacityChange}
           onOpenFile={onOpenFile}
           onSetCover={onSetCover}
-          hasCover={hasCover}
+          onRemoveCover={onRemoveCover}
+          alwaysOnTop={alwaysOnTop}
+          onToggleAlwaysOnTop={onToggleAlwaysOnTop}
           barVisible={barVisible}
         />
       <CacheGrid
