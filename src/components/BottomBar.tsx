@@ -9,14 +9,12 @@ interface Props {
   scale: number;
   fgColor: string;
   bgColor: string;
-  isHighRes: boolean;
   rawMode: boolean;
   immersive: boolean;
   showUI?: boolean;
   goToPage: (n: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
-  toggleQuality: () => void;
   onSetRawMode: (v: boolean) => void;
   onBgColorChange?: (c: string) => void;
   onFgColorChange?: (c: string) => void;
@@ -35,8 +33,8 @@ const btnCls = "px-1.5 py-0.5 rounded text-xs cursor-pointer transition-opacity 
 const btnClsDisabled = btnCls + " disabled:opacity-40";
 
 export default function BottomBar({
-  pageNum, totalPages, loading, scale, fgColor, bgColor, isHighRes, rawMode, immersive,
-  showUI = false, goToPage, zoomIn, zoomOut, toggleQuality, onSetRawMode,
+  pageNum, totalPages, loading, scale, fgColor, bgColor, rawMode, immersive,
+  showUI = false, goToPage, zoomIn, zoomOut, onSetRawMode,
   onBgColorChange, onFgColorChange, onImmersiveChange, windowOpacity = 100, onWindowOpacityChange,
   onOpenFile, onSetCover, onRemoveCover, alwaysOnTop = true, onToggleAlwaysOnTop, barVisible = true,
 }: Props) {
@@ -176,14 +174,6 @@ export default function BottomBar({
             style={{ accentColor: fgColor }}
             title="窗口透明度"
           />
-          <button
-            className={btnCls}
-            style={{ backgroundColor: fgColor + "22", color: fgColor }}
-            onClick={toggleQuality}
-            title={isHighRes ? "切换标清渲染" : "切换高清渲染"}
-          >
-            {isHighRes ? "高清" : "标清"}
-          </button>
           {immBtn}
         </div>
       )}

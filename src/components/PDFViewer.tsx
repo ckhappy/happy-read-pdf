@@ -79,7 +79,6 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
   }, [fileName]);
 
   const renderScaleRef = useRef(2.0);
-  const [isHighRes, setIsHighRes] = useState(true);
   const loadingRef = useRef(false);
   const showUIRef = useRef(showUI);
   showUIRef.current = showUI;
@@ -421,22 +420,6 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
     }
   }, [displayImageData, fileName]);
 
-  const toggleQuality = useCallback(() => {
-    const next = renderScaleRef.current === 2.0 ? 1.0 : 2.0;
-    renderScaleRef.current = next;
-    setIsHighRes(next === 2.0);
-    for (const bmp of pageCacheRef.current.values()) bmp.close();
-    pageCacheRef.current.clear();
-    displayCacheRef.current.clear();
-    for (const [, task] of preloadCancelRef.current) task.cancel();
-    preloadCancelRef.current.clear();
-    preloadTasksRef.current.clear();
-    preloadQueueRef.current = [];
-    activePreloadsRef.current = 0;
-    renderPageRef.current(pageRef.current);
-    ensurePreloadWindow(pageRef.current);
-  }, [ensurePreloadWindow]);
-
   const toggleMaximize = useCallback(() => {
     if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
     import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
@@ -676,14 +659,12 @@ export default function PDFViewer({ fileUrl, fileName, bgColor, fgColor, showUI 
           scale={scale}
           fgColor={fgColor}
           bgColor={bgColor}
-          isHighRes={isHighRes}
           rawMode={rawMode}
           immersive={immersive}
           showUI={showUI}
           goToPage={goToPage}
           zoomIn={zoomIn}
           zoomOut={zoomOut}
-          toggleQuality={toggleQuality}
           onSetRawMode={setRawModeExplicit}
           onBgColorChange={onBgColorChange}
           onFgColorChange={onFgColorChange}
