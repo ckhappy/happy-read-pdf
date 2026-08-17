@@ -6,8 +6,22 @@ export function applyColorTransform(
   const data = imageData.data;
   const [br, bg, bb] = bgColor;
   const [fr, fg, ff] = fgColor;
-  const bgPx = 0xff000000 | (bb << 16) | (bg << 8) | br;
-  const fgPx = 0xff000000 | (ff << 16) | (fg << 8) | fr;
+
+  // Precompute per-channel lookup tables indexed by source luminance (0..255).
+  // Each luminance maps to a smooth blend between bg and fg, so anti-aliased
+  // (gray) edge pixels stay smooth instead of snapping to a hard threshold and
+  // destroying the glyph edges (the old "hard threshold" approach left gray
+  // edge pixels untouched or snapped them, which looked blurry on low-res PDFs).
+  const rLUT = new Uint8ClampedArray(256);
+  const gLUT = new Uint8ClampedArray(256);
+  const bLUT = new Uint8ClampedArray(256);
+  for (let lum = 0; lum < 256; lum++) {
+    const coverage = (255 - lum) / 255; // 0 = background (white), 1 = foreground (black)
+    rLUT[lum] = Math.round(br + (fr - br) * coverage);
+    gLUT[lum] = Math.round(bg + (fg - bg) * coverage);
+    bLUT[lum] = Math.round(bb + (ff - bb) * coverage);
+  }
+
   const view = new Uint32Array(data.buffer, data.byteOffset, data.length >> 2);
   const len = view.length;
 
@@ -19,19 +33,9 @@ export function applyColorTransform(
     const r = px & 0xff;
     const g = (px >> 8) & 0xff;
     const b = (px >> 16) & 0xff;
+    const lum = (76 * r + 150 * g + 29 * b) >> 8; // 0..255
 
-    if (r > 200 && g > 200 && b > 200) {
-      view[i] = bgPx;
-    } else if (r < 55 && g < 55 && b < 55) {
-      view[i] = fgPx;
-    } else {
-      const lum = (76 * r + 150 * g + 29 * b) >> 8;
-      if (lum > 200) {
-        view[i] = bgPx;
-      } else if (lum < 55) {
-        view[i] = fgPx;
-      }
-    }
+    view[i] = (a << 24) | (bLUT[lum] << 16) | (gLUT[lum] << 8) | rLUT[lum];
   }
 
   return imageData;
